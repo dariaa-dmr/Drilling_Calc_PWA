@@ -1,4 +1,4 @@
-/* DrillingCalc PWA clean bundle v5 */
+/* DrillingCalc PWA bundle v7: true offline startup + automatic dry drilling coefficient */
 (() => {
   "use strict";
 
@@ -190,6 +190,10 @@
     return rows.length ? Number(rows.at(-1).min_order) : 0;
   };
 
+  const findDryCoefficient = (catalog) => (catalog.coefficients || []).find((row) =>
+    row.id === "c-7" || /сухое\s*сверлен/i.test(String(row.name || ""))
+  );
+
   function validateCatalog(catalog) {
     const errors = [];
     const rules = catalog.rules || {};
@@ -247,17 +251,34 @@
     const range = findDiameterRange(catalog, diameter);
     if (!range) throw new Error(`Отверстие №${index + 1}: диаметр ${diameter} мм отсутствует в прайсе`);
     const material = hole.material === "кирпич" ? "кирпич" : "бетон";
+    const drillingType = hole.drilling_type === "dry" ? "dry" : "wet";
     const pricePerCm = material === "бетон" ? Number(range.concrete_price) : Number(range.brick_price);
     const baseCost = pricePerCm * depth;
 
+    // Dry drilling is a drilling mode, not an optional checkbox. The catalog's
+    // «сухое сверление» coefficient is therefore applied automatically.
+    const dryCoefficient = findDryCoefficient(catalog);
+    const coefficientIds = new Set(hole.coefficient_ids || []);
+    if (dryCoefficient) {
+      if (drillingType === "dry") coefficientIds.add(dryCoefficient.id);
+      else coefficientIds.delete(dryCoefficient.id);
+    } else if (drillingType === "dry") {
+      throw new Error("В конфигурации отсутствует коэффициент сухого сверления");
+    }
+
     let extraPercent = 0;
     const coefficientLines = [];
-    for (const id of hole.coefficient_ids || []) {
+    for (const id of coefficientIds) {
       const item = catalog.coefficients.find((row) => row.id === id);
       if (!item) throw new Error(`Коэффициент не найден: ${id}`);
       const percent = (Number(item.value) - 1) * 100;
       extraPercent += percent;
-      coefficientLines.push({ id: item.id, name: item.name, percent });
+      coefficientLines.push({
+        id: item.id,
+        name: item.name,
+        percent,
+        automatic: drillingType === "dry" && item.id === dryCoefficient?.id
+      });
     }
     const coefficientSurcharge = baseCost * extraPercent / 100;
 
@@ -276,7 +297,7 @@
       diameter,
       depth,
       material,
-      drilling_type: hole.drilling_type === "dry" ? "dry" : "wet",
+      drilling_type: drillingType,
       price_per_cm: pricePerCm,
       base_cost: baseCost,
       coefficients: coefficientLines,
@@ -373,7 +394,7 @@
     };
   }
 
-  const api = { asNumber, findDiameterRange, legalMinimum, validateCatalog, calculateOrder };
+  const api = { asNumber, findDiameterRange, legalMinimum, findDryCoefficient, validateCatalog, calculateOrder };
   globalThis.DrillingLogic = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();
@@ -799,7 +820,10 @@
   }
 
   function updateHoleSummary(card, hole) {
-    $(".hole-summary", card).textContent = hole.diameter && hole.depth ? `${hole.diameter} мм × ${hole.depth} см · ${hole.material}` : "Заполните параметры";
+    const typeLabel = hole.drilling_type === "dry" ? "сухое" : "мокрое";
+    $(".hole-summary", card).textContent = hole.diameter && hole.depth
+      ? `${hole.diameter} мм × ${hole.depth} см · ${hole.material} · ${typeLabel}`
+      : "Заполните параметры";
   }
 
   function renderHole(hole, index) {
@@ -807,13 +831,33 @@
     card.dataset.id = hole.id; card.classList.toggle("expanded", index === draft.holes.length - 1 || draft.holes.length === 1);
     $(".hole-number", card).textContent = index + 1; updateHoleSummary(card, hole);
     const diameter = $(".diameter", card), depth = $(".depth", card), material = $(".material", card), drillingType = $(".drilling-type", card);
+    const dryCoefficient = DrillingLogic.findDryCoefficient(catalog);
+    if (dryCoefficient) {
+      // Remove a stale manual selection from older versions: dry is automatic now.
+      hole.coefficient_ids = hole.coefficient_ids.filter((id) => id !== dryCoefficient.id);
+      const dryPercent = Math.round((Number(dryCoefficient.value) - 1) * 1000) / 10;
+      const dryOption = drillingType.querySelector('option[value="dry"]');
+      if (dryOption) dryOption.textContent = `Сухое (+${dryPercent}%)`;
+    }
     diameter.value = hole.diameter; depth.value = hole.depth; material.value = hole.material; drillingType.value = hole.drilling_type;
     $(".hole-toggle", card).addEventListener("click", () => card.classList.toggle("expanded"));
     $(".remove-hole", card).addEventListener("click", () => { if (draft.holes.length === 1) return showToast("Нужно хотя бы одно отверстие"); draft.holes = draft.holes.filter((x) => x.id !== hole.id); lastCalculation = null; renderHoles(); persistState(); });
     const update = () => { hole.diameter = diameter.value; hole.depth = depth.value; hole.material = material.value; hole.drilling_type = drillingType.value; diameter.classList.toggle("invalid", Boolean(hole.diameter) && !DrillingLogic.findDiameterRange(catalog, Number(hole.diameter))); updateHoleSummary(card, hole); lastCalculation = null; updateExportState(); persistState(); };
-    [diameter, depth, material, drillingType].forEach((el) => el.addEventListener("input", update));
+    [diameter, depth, material].forEach((el) => el.addEventListener("input", update));
+    drillingType.addEventListener("change", () => {
+      update();
+      renderHoles();
+    });
     const coeffBox = $(".coefficients", card);
-    catalog.coefficients.forEach((item) => coeffBox.append(choiceElement({ checked: hole.coefficient_ids.includes(item.id), title: item.name, meta: "Условие расчёта", onChange: (checked) => { hole.coefficient_ids = checked ? [...new Set([...hole.coefficient_ids, item.id])] : hole.coefficient_ids.filter((id) => id !== item.id); lastCalculation = null; updateExportState(); persistState(); } })));
+    if (dryCoefficient && hole.drilling_type === "dry") {
+      const automatic = document.createElement("div");
+      automatic.className = "choice selected";
+      automatic.innerHTML = `<div><div class="choice-title">${dryCoefficient.name}</div><div class="choice-meta">Применяется автоматически при сухом сверлении</div></div>`;
+      coeffBox.append(automatic);
+    }
+    catalog.coefficients
+      .filter((item) => item.id !== dryCoefficient?.id)
+      .forEach((item) => coeffBox.append(choiceElement({ checked: hole.coefficient_ids.includes(item.id), title: item.name, meta: "Условие расчёта", onChange: (checked) => { hole.coefficient_ids = checked ? [...new Set([...hole.coefficient_ids, item.id])] : hole.coefficient_ids.filter((id) => id !== item.id); lastCalculation = null; updateExportState(); persistState(); } })));
     const servicesBox = $(".hole-services", card);
     catalog.services.filter((item) => item.is_per_hole).forEach((item) => servicesBox.append(choiceElement({ checked: Object.hasOwn(hole.services, item.id), title: item.name, meta: `за ${item.unit}`, quantity: { value: hole.services[item.id] ?? 1 }, onChange: (checked, qty) => { if (checked) hole.services[item.id] = qty || 1; else delete hole.services[item.id]; lastCalculation = null; updateExportState(); persistState(); } })));
     return fragment;
@@ -893,13 +937,24 @@
   }
 
   async function initialize() {
-    bindEvents(); applyTheme();
+    bindEvents();
+    applyTheme();
+
+    // The encrypted vault is local. Show the correct screen immediately,
+    // without waiting for any network-dependent Service Worker update check.
     vaultContainer = await SecureStorage.get("vault");
-    if ("serviceWorker" in navigator && location.protocol === "https:") {
-      try { await navigator.serviceWorker.register("./sw.js", { scope: "./" }); } catch (error) { console.warn("Service Worker", error); }
-    }
-    await SecureStorage.requestPersistence();
     showOnly(vaultContainer ? "lockScreen" : "activationScreen");
+
+    // These maintenance operations must never block offline startup.
+    SecureStorage.requestPersistence().catch((error) => {
+      console.warn("Persistent storage", error);
+    });
+
+    if ("serviceWorker" in navigator && location.protocol === "https:") {
+      navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch((error) => {
+        console.warn("Service Worker", error);
+      });
+    }
   }
 
   initialize().catch((error) => { document.body.innerHTML = `<main style="padding:24px;font-family:sans-serif"><h1>Ошибка запуска</h1><p>${String(error.message || error)}</p></main>`; });

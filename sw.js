@@ -1,9 +1,9 @@
-const CACHE = "drilling-secure-pwa-clean-v5-20260713";
+const CACHE = "drilling-secure-pwa-clean-v7-20260713";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles-v5.css?v=5",
-  "./bundle-v5.js?v=5",
+  "./styles-v5.css?v=7",
+  "./bundle-v5.js?v=7",
   "./manifest.webmanifest",
   "./apple-touch-icon.png",
   "./icon-192.png",
@@ -26,31 +26,40 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put("./index.html", copy));
-          }
-          return response;
-        })
-        .catch(() => caches.match("./index.html"))
+      caches.match("./index.html").then((cached) => {
+        const networkUpdate = fetch(event.request)
+          .then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              caches.open(CACHE).then((cache) => cache.put("./index.html", copy));
+            }
+            return response;
+          })
+          .catch(() => null);
+
+        // Launch immediately from cache when available; update it in background.
+        return cached || networkUpdate;
+      })
     );
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
-      if (response.ok) {
-        const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-      }
-      return response;
-    }))
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+      return fetch(event.request).then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      });
+    })
   );
 });
