@@ -10,7 +10,7 @@
   <title>Калькулятор бурения</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./styles-v5.css?v=5">
+  <link rel="stylesheet" href="./styles-v5.css?v=7">
 </head>
 <body>
   <section id="loadingScreen" class="gate"><div class="gate-card"><div class="logo">◉</div><h1>Калькулятор бурения</h1><p>Проверка локального хранилища…</p></div></section>
@@ -68,6 +68,6 @@
 
   <template id="holeTemplate"><article class="hole-card"><div class="hole-head"><button class="hole-toggle" type="button"><span>Отверстие <b class="hole-number"></b></span><span class="hole-summary">Заполните параметры</span></button><button class="remove-hole" type="button" aria-label="Удалить">×</button></div><div class="hole-body"><div class="form-grid"><label>Диаметр, мм<input class="diameter" type="number" inputmode="decimal" min="0.1" step="0.1" required></label><label>Глубина, см<input class="depth" type="number" inputmode="decimal" min="0.1" step="0.1" required></label><label>Материал<select class="material"><option value="бетон">Бетон</option><option value="кирпич">Кирпич</option></select></label><label>Тип сверления<select class="drilling-type"><option value="wet">Мокрое</option><option value="dry">Сухое</option></select></label></div><details class="subdetails"><summary>Надбавки</summary><div class="coefficients choice-list"></div></details><details class="subdetails"><summary>Услуги для отверстия</summary><div class="hole-services choice-list"></div></details></div></article></template>
   <div id="toast" class="toast" hidden></div>
-  <script src="./bundle-v5.js?v=5"></script>
+  <script src="./bundle-v5.js?v=7"></script>
 </body>
 </html>
