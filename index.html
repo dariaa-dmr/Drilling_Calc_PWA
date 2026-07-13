@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#172033">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Бурение">
+  <title>Калькулятор бурения</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+  <link rel="stylesheet" href="./styles-v5.css?v=5">
+</head>
+<body>
+  <section id="loadingScreen" class="gate"><div class="gate-card"><div class="logo">◉</div><h1>Калькулятор бурения</h1><p>Проверка локального хранилища…</p></div></section>
+
+  <section id="activationScreen" class="gate" hidden>
+    <form id="activationForm" class="gate-card" autocomplete="off">
+      <div class="logo">◉</div><div class="eyebrow">Первичная активация</div><h1>Загрузите данные заказчика</h1>
+      <p>В приложении нет встроенного прайса. Импортируйте зашифрованный файл <b>.drillcalc</b>.</p>
+      <label class="file-pick">Файл конфигурации<input id="activationFile" type="file" accept=".drillcalc,application/json" required></label>
+      <label>Пароль файла<input id="activationPackagePassword" type="password" minlength="10" required></label>
+      <label>Новый локальный код<input id="activationLocalCode" type="password" minlength="6" maxlength="64" required></label>
+      <label>Повторите локальный код<input id="activationLocalCode2" type="password" minlength="6" maxlength="64" required></label>
+      <button class="btn primary" type="submit">Активировать на этом iPhone</button>
+      <div id="activationError" class="error" aria-live="polite"></div>
+      <small>После активации пароль файла больше не нужен. Для ежедневного входа используется локальный код.</small>
+    </form>
+  </section>
+
+  <section id="lockScreen" class="gate" hidden>
+    <form id="unlockForm" class="gate-card" autocomplete="off">
+      <div class="logo">◉</div><div class="eyebrow">Локальный доступ</div><h1>Калькулятор бурения</h1>
+      <p id="lockClientName">Данные зашифрованы на этом устройстве.</p>
+      <label>Код доступа<input id="unlockCode" type="password" minlength="6" maxlength="64" required autofocus></label>
+      <button id="unlockButton" class="btn primary" type="submit">Открыть</button>
+      <div id="unlockError" class="error" aria-live="polite"></div>
+    </form>
+  </section>
+
+  <div id="app" class="app-shell" hidden>
+    <header class="topbar"><div><div class="eyebrow" id="clientLabel">Офлайн</div><h1>Калькулятор бурения</h1></div><div class="top-actions"><button id="themeBtn" class="icon-btn" type="button" title="Тема">◐</button><button id="lockBtn" class="icon-btn" type="button" title="Заблокировать">⌁</button></div></header>
+    <main>
+      <section id="view-calculator" class="view active">
+        <div class="status-strip"><span id="networkDot" class="status-dot"></span><span id="networkText">Офлайн-режим готов</span><span id="saveState" class="save-state">Сохранено</span></div>
+        <div class="section-head"><div><div class="eyebrow">Заказ</div><h2>Отверстия</h2></div><button id="addHoleBtn" class="btn small" type="button">+ Добавить</button></div>
+        <div id="holesContainer" class="stack"></div>
+        <details class="panel" open><summary>Общие услуги</summary><div id="orderServicesContainer" class="choice-list"></div></details>
+        <details class="panel"><summary>Разовые наценки</summary><div id="feesContainer" class="choice-list"></div></details>
+        <section class="panel form-grid"><label>Километраж, км<input id="km" type="number" inputmode="decimal" min="0" step="0.1" value="0"><small id="kmRateNote">Из конфигурации</small></label><label>Тип клиента<select id="clientType"><option value="физлицо">Физлицо</option><option value="юрлицо">Юрлицо</option></select><small id="minimumNote"></small></label><label>Скидка, %<input id="discount" type="number" inputmode="decimal" min="0" step="0.1" value="0"><small id="discountNote">Из конфигурации</small></label></section>
+        <div class="sticky-actions"><button id="calculateBtn" class="btn primary grow" type="button">Рассчитать</button><button id="exportXlsxBtn" class="btn" type="button" disabled>Excel</button></div>
+        <section id="resultPanel" class="result-panel" hidden><div class="result-title">Стоимость заказа</div><div id="resultRows" class="result-rows"></div><div class="result-total"><span>Итого</span><strong id="resultTotal">0 руб.</strong></div></section>
+      </section>
+
+      <section id="view-data" class="view">
+        <div class="eyebrow">Защищённое устройство</div><h2>Данные</h2>
+        <section class="panel"><h3>Конфигурация</h3><dl class="meta"><dt>Клиент</dt><dd id="metaClient">—</dd><dt>Версия</dt><dd id="metaVersion">—</dd><dt>Загружена</dt><dd id="metaIssued">—</dd></dl><p class="muted">Исходный прайс не показывается и не экспортируется из приложения.</p></section>
+        <section class="panel"><h3>Обновить прайс</h3><form id="updatePackageForm" class="form-grid compact"><label class="file-pick">Новый файл<input id="updatePackageFile" type="file" accept=".drillcalc,application/json" required></label><label>Пароль файла<input id="updatePackagePassword" type="password" minlength="10" required></label><button class="btn" type="submit">Импортировать обновление</button></form></section>
+        <section class="panel"><h3>Зашифрованная аварийная копия</h3><p class="muted">Файл содержит только зашифрованный контейнер. Для восстановления нужен текущий локальный код.</p><div class="button-grid"><button id="exportVaultBtn" class="btn" type="button">Сохранить копию</button><label class="btn file-pick">Восстановить<input id="restoreVaultInput" type="file" accept=".drillvault,application/json"></label></div></section>
+        <section class="panel"><h3>Изменить локальный код</h3><form id="changeCodeForm" class="form-grid compact"><label>Текущий код<input id="currentCode" type="password" minlength="6" required></label><label>Новый код<input id="newCode" type="password" minlength="6" maxlength="64" required></label><label>Повтор нового кода<input id="newCode2" type="password" minlength="6" maxlength="64" required></label><button class="btn" type="submit">Изменить код</button></form></section>
+        <section class="panel"><h3>Установка на iPhone</h3><p class="muted">Safari → «Поделиться» → «На экран Домой». После первой полной загрузки приложение работает без сети.</p><button id="offlineCheckBtn" class="btn" type="button">Проверить готовность офлайн</button><div id="offlineCheckResult" class="muted"></div></section>
+        <section class="panel danger"><h3>Удалить данные</h3><p class="muted">Удаляет зашифрованный прайс и черновик с этого устройства.</p><button id="resetBtn" class="btn danger-btn" type="button">Сбросить активацию</button></section>
+      </section>
+    </main>
+    <nav class="bottom-nav"><button class="nav-btn active" data-target="calculator" type="button"><span>⌁</span>Расчёт</button><button class="nav-btn" data-target="data" type="button"><span>◫</span>Данные</button></nav>
+  </div>
+
+  <template id="holeTemplate"><article class="hole-card"><div class="hole-head"><button class="hole-toggle" type="button"><span>Отверстие <b class="hole-number"></b></span><span class="hole-summary">Заполните параметры</span></button><button class="remove-hole" type="button" aria-label="Удалить">×</button></div><div class="hole-body"><div class="form-grid"><label>Диаметр, мм<input class="diameter" type="number" inputmode="decimal" min="0.1" step="0.1" required></label><label>Глубина, см<input class="depth" type="number" inputmode="decimal" min="0.1" step="0.1" required></label><label>Материал<select class="material"><option value="бетон">Бетон</option><option value="кирпич">Кирпич</option></select></label><label>Тип сверления<select class="drilling-type"><option value="wet">Мокрое</option><option value="dry">Сухое</option></select></label></div><details class="subdetails"><summary>Надбавки</summary><div class="coefficients choice-list"></div></details><details class="subdetails"><summary>Услуги для отверстия</summary><div class="hole-services choice-list"></div></details></div></article></template>
+  <div id="toast" class="toast" hidden></div>
+  <script src="./bundle-v5.js?v=5"></script>
+</body>
+</html>
